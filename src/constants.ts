@@ -85,15 +85,23 @@ export const DESIGNS: Design[] = [
   }
 ];
 
-export const COLORS = [
-  '#FF595E', // Coral Red
-  '#FFCA3A', // Sunglow Yellow
-  '#8AC926', // Yellow Green
-  '#1982C4', // Royal Blue
-  '#6A4C93', // Royal Purple
-  '#FF924C', // Orange
-  '#5CF4FF', // Cyan
-  '#FF71CE', // Pink
-  '#000000', // Black
-  '#FFFFFF', // White
+export interface AppColor {
+  hex: string;
+  name: string;
+  meaning: string;
+}
+
+export const COLORS: AppColor[] = [
+  { hex: '#FF595E', name: 'Coral Red', meaning: 'Energy, passion, and excitement.' },
+  { hex: '#FFCA3A', name: 'Sunglow Yellow', meaning: 'Happiness, optimism, and creativity.' },
+  { hex: '#8AC926', name: 'Yellow Green', meaning: 'Growth, harmony, and freshness.' },
+  { hex: '#1982C4', name: 'Royal Blue', meaning: 'Tranquility, stability, and trust.' },
+  { hex: '#6A4C93', name: 'Royal Purple', meaning: 'Wisdom, luxury, and spiritual awareness.' },
+  { hex: '#FF924C', name: 'Deep Orange', meaning: 'Warmth, enthusiasm, and vitality.' },
+  { hex: '#5CF4FF', name: 'Electric Cyan', meaning: 'Clarity, calm, and modern thinking.' },
+  { hex: '#FF71CE', name: 'Neon Pink', meaning: 'Compassion, playfulness, and romance.' },
+  { hex: '#000000', name: 'Deep Black', meaning: 'Power, elegance, and mystery.' },
+  { hex: '#FFFFFF', name: 'Pure White', meaning: 'Peace, cleanliness, and simplicity.' },
+  { hex: '#4ECDC4', name: 'Medium Turquoise', meaning: 'Renewal, energy, and balance.' },
+  { hex: '#F1A7F1', name: 'Soft Lavender', meaning: 'Grace, calm, and femininity.' },
 ];

@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Undo2, Trash2, Download } from 'lucide-react';
-import { COLORS } from '../constants';
-import { motion } from 'motion/react';
+import { Undo2, Trash2, Download, ChevronDown } from 'lucide-react';
+import { COLORS, AppColor } from '../constants';
+import { motion, AnimatePresence } from 'motion/react';
+import { useState } from 'react';
 
 interface ToolbarProps {
   currentColor: string;
@@ -30,112 +31,124 @@ export default function Toolbar({
   onDownload,
   isFillTool,
 }: ToolbarProps) {
+  const [isEraseMenuOpen, setIsEraseMenuOpen] = useState(false);
+  const activeColor = COLORS.find(c => c.hex === currentColor) || COLORS[0];
+
   return (
-    <aside className="w-80 border-l border-black/5 bg-white p-8 flex flex-col gap-10 overflow-y-auto">
+    <aside className="fixed bottom-0 left-0 right-0 h-auto md:relative md:h-full md:w-80 border-t-2 md:border-t-0 md:border-l-2 border-black bg-white p-6 md:p-8 flex flex-col gap-8 overflow-y-auto z-40">
       {/* Color Palette */}
       <div>
-        <h3 className="text-[10px] uppercase font-black tracking-widest mb-6 opacity-40">Color Palette</h3>
-        <div className="grid grid-cols-4 gap-4">
+        <h3 className="text-[10px] uppercase font-black tracking-tighter mb-4">Select Vibrancy</h3>
+        <div className="grid grid-cols-6 md:grid-cols-4 gap-2 md:gap-3">
           {COLORS.map((color) => (
             <motion.button
-              key={color}
+              key={color.hex}
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              onClick={() => onColorChange(color)}
-              className={`aspect-square rounded-full transition-all relative ${
-                currentColor === color 
-                  ? 'ring-2 ring-black ring-offset-2' 
-                  : 'hover:opacity-80'
+              onClick={() => onColorChange(color.hex)}
+              className={`aspect-square rounded-none transition-all relative border-2 ${
+                currentColor === color.hex 
+                  ? 'border-black scale-110 z-10' 
+                  : 'border-transparent hover:border-black/20'
               }`}
-              style={{ 
-                backgroundColor: color,
-                border: color === '#FFFFFF' ? '1px solid rgba(0,0,0,0.1)' : 'none'
-              }}
+              style={{ backgroundColor: color.hex }}
+              title={color.name}
             />
           ))}
         </div>
+        
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={activeColor.hex}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mt-4 p-4 bg-zinc-50 border-2 border-black"
+          >
+            <p className="text-[10px] font-black uppercase tracking-widest text-black mb-1">{activeColor.name}</p>
+            <p className="text-[11px] font-medium leading-tight text-black/60 italic">{activeColor.meaning}</p>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* Brush Dynamics */}
       {!isFillTool && (
         <div>
-          <h3 className="text-[10px] uppercase font-black tracking-widest mb-6 opacity-40">Brush Dynamics</h3>
-          <div className="space-y-6">
+          <h3 className="text-[10px] uppercase font-black tracking-tighter mb-4">Precision</h3>
+          <div className="space-y-4">
             <div>
-              <div className="flex justify-between text-[10px] uppercase font-bold mb-3">
-                <span>Size</span>
-                <span>{brushSize}px</span>
+              <div className="flex justify-between text-[10px] font-black uppercase mb-2">
+                <span>Weight</span>
+                <span>{brushSize}pt</span>
               </div>
-              <div className="relative h-px bg-black/10">
-                <input
-                  type="range"
-                  min="2"
-                  max="40"
-                  value={brushSize}
-                  onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
-                  className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
-                />
-                <div 
-                  className="absolute h-full bg-black top-0 left-0" 
-                  style={{ width: `${((brushSize - 2) / 38) * 100}%` }}
-                />
-                <div 
-                  className="absolute -top-1 w-2 h-2 bg-black rounded-full transition-all"
-                  style={{ left: `${((brushSize - 2) / 38) * 100}%`, transform: 'translateX(-50%)' }}
-                />
-              </div>
+              <input
+                type="range"
+                min="2"
+                max="80"
+                value={brushSize}
+                onChange={(e) => onBrushSizeChange(parseInt(e.target.value))}
+                className="w-full h-1 bg-black rounded-none appearance-none cursor-pointer accent-black"
+              />
             </div>
           </div>
         </div>
       )}
 
       {/* Actions */}
-      <div className="flex flex-col gap-3 mt-4">
-        <h3 className="text-[10px] uppercase font-black tracking-widest mb-2 opacity-40">Canvas Actions</h3>
-        <div className="grid grid-cols-2 gap-2">
+      <div className="flex bg-black p-1 gap-1">
+          <button
+              onClick={onUndo}
+              className="flex-1 py-3 bg-white border border-black hover:bg-zinc-100 flex flex-col items-center justify-center gap-1 group"
+          >
+              <Undo2 size={16} className="group-active:scale-90 transition-transform" />
+              <span className="text-[8px] font-black uppercase">Undo</span>
+          </button>
+          
+          <div className="relative flex-1 flex">
             <button
-                onClick={onUndo}
-                className="py-3 px-4 border border-black/10 rounded-lg text-[10px] uppercase font-bold tracking-widest hover:bg-zinc-50 flex items-center justify-center gap-2"
+                onClick={() => setIsEraseMenuOpen(!isEraseMenuOpen)}
+                className="flex-1 py-3 bg-white border border-black hover:bg-red-50 flex flex-col items-center justify-center gap-1 group"
             >
-                <Undo2 size={14} /> Undo
+                <Trash2 size={16} className="text-red-500 group-active:scale-90 transition-transform" />
+                <span className="text-[8px] font-black uppercase text-red-500">Clear</span>
             </button>
-            <button
-                onClick={onClearAll}
-                className="py-3 px-4 border border-black/10 rounded-lg text-[10px] uppercase font-bold tracking-widest hover:bg-red-50 hover:text-red-600 transition-colors flex items-center justify-center gap-2"
-            >
-                <Trash2 size={14} /> Erase All
-            </button>
-            <button
-                onClick={onClearBlocks}
-                className="col-span-2 py-3 px-4 border border-black/10 rounded-lg text-[10px] uppercase font-bold tracking-widest hover:bg-zinc-50 flex items-center justify-center gap-2"
-            >
-                <Trash2 size={14} /> Erase Only Blocks
-            </button>
-        </div>
-      </div>
-
-      {/* Stats / Footer of Sidebar */}
-      <div className="mt-auto">
-        <div className="p-5 border border-black/10 rounded-xl bg-[#F9F8F6]">
-          <h4 className="text-[10px] uppercase font-black tracking-widest mb-3">Canvas Info</h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-lg font-bold tracking-tighter">HD</p>
-              <p className="text-[8px] uppercase opacity-50 font-black">Resolution</p>
-            </div>
-            <div>
-              <p className="text-lg font-bold tracking-tighter">800px</p>
-              <p className="text-[8px] uppercase opacity-50 font-black">Dimension</p>
-            </div>
+            
+            <AnimatePresence>
+              {isEraseMenuOpen && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="absolute bottom-full left-0 right-0 mb-2 bg-black border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white overflow-hidden"
+                >
+                  <button 
+                    onClick={() => { onClearBlocks(); setIsEraseMenuOpen(false); }}
+                    className="w-full text-left p-3 text-[9px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-colors border-b border-white/10"
+                  >
+                    Erase Fills Only
+                  </button>
+                  <button 
+                    onClick={() => { onClearAll(); setIsEraseMenuOpen(false); }}
+                    className="w-full text-left p-3 text-[9px] font-black uppercase tracking-widest hover:bg-red-600 transition-colors"
+                  >
+                    Reset Everything
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        </div>
-        
-        <button
-          onClick={onDownload}
-          className="w-full mt-6 bg-black text-white py-4 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
-        >
-          <Download size={16} /> Export Design
-        </button>
+
+          <button
+              onClick={onDownload}
+              className="flex-1 py-3 bg-black text-white hover:bg-zinc-800 flex flex-col items-center justify-center gap-1 group"
+          >
+              <Download size={16} className="group-active:translate-y-1 transition-transform" />
+              <span className="text-[8px] font-black uppercase">Save</span>
+          </button>
+      </div>
+      
+      <div className="hidden md:block mt-auto pt-4 border-t-2 border-black/5">
+        <p className="text-[9px] font-black uppercase tracking-widest opacity-20">Minimalist Studio Mode</p>
       </div>
     </aside>
   );

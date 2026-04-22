@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 interface CanvasRendererProps {
   design: Design;
   color: string;
-  tool: 'pen' | 'fill' | 'eraser';
+  tool: 'pen' | 'fill' | 'eraser' | 'rect' | 'circle' | 'triangle';
   brushSize: number;
   onSave?: (dataUrl: string) => void;
   undoTrigger: number;
@@ -29,9 +29,11 @@ export default function CanvasRenderer({
   clearType,
 }: CanvasRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const templateRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const historyRef = useRef<ImageData[]>([]);
+  const startPoint = useRef<{ x: number; y: number } | null>(null);
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
 
   // Initialize canvas when design changes
@@ -44,6 +46,11 @@ export default function CanvasRenderer({
     // Set canvas size
     canvas.width = 800;
     canvas.height = 800;
+    
+    if (overlayCanvasRef.current) {
+        overlayCanvasRef.current.width = 800;
+        overlayCanvasRef.current.height = 800;
+    }
 
     // Fill with white
     ctx.fillStyle = 'white';
@@ -54,7 +61,6 @@ export default function CanvasRenderer({
       return;
     }
 
-    // Draw the design
     const img = new Image();
     const svgString = `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="${design.viewBox}" width="800" height="800">
@@ -67,7 +73,6 @@ export default function CanvasRenderer({
     img.onload = () => {
       ctx.drawImage(img, 0, 0, 800, 800);
       
-      // Store template for "Erase only blocks"
       if (templateRef.current) {
         templateRef.current.width = 800;
         templateRef.current.height = 800;
@@ -76,11 +81,10 @@ export default function CanvasRenderer({
       }
       
       URL.revokeObjectURL(url);
-      saveState(); // Initial state
+      saveState();
     };
     img.src = url;
 
-    // Reset history on design change
     historyRef.current = [];
   }, [design]);
 
@@ -110,8 +114,6 @@ export default function CanvasRenderer({
         saveState();
       }
     } else if (clearType === 'blocks') {
-      // "Erase only blocks" -> We interpret this as "Reset all colors to white part of template"
-      // while keeping the lines. If there are no lines (blank canvas), it behaves like Clear All.
       if (!design.svgPath) {
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -127,8 +129,6 @@ export default function CanvasRenderer({
       const templateData = tCtx.getImageData(0, 0, 800, 800).data;
 
       for (let i = 0; i < pixels.length; i += 4) {
-        // If the original template pixel was white (or near white), reset current pixel to white
-        // This keeps the original black lines.
         if (templateData[i] > 240 && templateData[i+1] > 240 && templateData[i+2] > 240) {
            pixels[i] = 255;
            pixels[i+1] = 255;
@@ -139,13 +139,13 @@ export default function CanvasRenderer({
       ctx.putImageData(imageData, 0, 0);
       saveState();
     }
-  }, [clearTrigger]);
+  }, [clearTrigger, clearType, design]);
 
   // Handle Undo
   useEffect(() => {
     if (undoTrigger === 0) return;
     if (historyRef.current.length > 1) {
-      historyRef.current.pop(); // Remove current state
+      historyRef.current.pop();
       const previousState = historyRef.current[historyRef.current.length - 1];
       const canvas = canvasRef.current;
       if (canvas && previousState) {
@@ -164,7 +164,6 @@ export default function CanvasRenderer({
     const currentState = ctx.getImageData(0, 0, canvas.width, canvas.height);
     historyRef.current.push(currentState);
     
-    // Limit history
     if (historyRef.current.length > 20) {
       historyRef.current.shift();
     }
@@ -202,7 +201,41 @@ export default function CanvasRenderer({
     }
 
     setIsDrawing(true);
+    startPoint.current = coords;
     lastPoint.current = coords;
+  };
+
+  const clearOverlay = () => {
+    const oCanvas = overlayCanvasRef.current;
+    if (!oCanvas) return;
+    const oCtx = oCanvas.getContext('2d');
+    if (!oCtx) return;
+    oCtx.clearRect(0, 0, oCanvas.width, oCanvas.height);
+  };
+
+  const drawShape = (ctx: CanvasRenderingContext2D, start: { x: number; y: number }, current: { x: number; y: number }, shapeType: string, isPreview: boolean) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    const width = current.x - start.x;
+    const height = current.y - start.y;
+
+    ctx.beginPath();
+    if (shapeType === 'rect') {
+      ctx.strokeRect(start.x, start.y, width, height);
+    } else if (shapeType === 'circle') {
+      const radius = Math.sqrt(width * width + height * height);
+      ctx.arc(start.x, start.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (shapeType === 'triangle') {
+      ctx.moveTo(start.x + width / 2, start.y);
+      ctx.lineTo(start.x, start.y + height);
+      ctx.lineTo(start.x + width, start.y + height);
+      ctx.closePath();
+      ctx.stroke();
+    }
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
@@ -210,28 +243,43 @@ export default function CanvasRenderer({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const oCanvas = overlayCanvasRef.current;
+    const oCtx = oCanvas?.getContext('2d');
+    if (!ctx || !oCtx) return;
 
     const coords = getCoordinates(e);
-    if (!coords || !lastPoint.current) return;
+    if (!coords || !lastPoint.current || !startPoint.current) return;
 
-    ctx.beginPath();
-    ctx.moveTo(lastPoint.current.x, lastPoint.current.y);
-    ctx.lineTo(coords.x, coords.y);
-    
-    ctx.strokeStyle = tool === 'eraser' ? 'white' : color;
-    ctx.lineWidth = brushSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.stroke();
+    if (tool === 'pen' || tool === 'eraser') {
+      ctx.beginPath();
+      ctx.moveTo(lastPoint.current.x, lastPoint.current.y);
+      ctx.lineTo(coords.x, coords.y);
+      ctx.strokeStyle = tool === 'eraser' ? 'white' : color;
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    } else {
+      // Shapes
+      clearOverlay();
+      drawShape(oCtx, startPoint.current, coords, tool, true);
+    }
 
     lastPoint.current = coords;
   };
 
-  const stopDrawing = () => {
+  const stopDrawing = (e?: React.MouseEvent | React.TouchEvent) => {
     if (isDrawing) {
+      if (['rect', 'circle', 'triangle'].includes(tool) && startPoint.current && lastPoint.current) {
+         const ctx = canvasRef.current?.getContext('2d');
+         if (ctx) {
+            drawShape(ctx, startPoint.current, lastPoint.current, tool, false);
+         }
+      }
+      clearOverlay();
       setIsDrawing(false);
       lastPoint.current = null;
+      startPoint.current = null;
       saveState();
     }
   };
@@ -324,7 +372,7 @@ export default function CanvasRenderer({
         </div>
       </div>
 
-      <div className="flex-1 bg-white border border-black/5 shadow-2xl rounded-sm relative overflow-hidden flex items-center justify-center canvas-dot-grid h-[600px]">
+      <div className="flex-1 bg-white border border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden flex items-center justify-center canvas-dot-grid h-[600px] touch-none">
         {/* Hidden template canvas for smart erasing */}
         <canvas ref={templateRef} className="hidden" />
         
@@ -336,10 +384,14 @@ export default function CanvasRenderer({
             onMouseMove={draw}
             onMouseUp={stopDrawing}
             onMouseLeave={stopDrawing}
-            onTouchStart={startDrawing}
-            onTouchMove={draw}
-            onTouchEnd={stopDrawing}
-            className="w-full h-full cursor-crosshair touch-none"
+            onTouchStart={(e) => { e.preventDefault(); startDrawing(e); }}
+            onTouchMove={(e) => { e.preventDefault(); draw(e); }}
+            onTouchEnd={(e) => { e.preventDefault(); stopDrawing(e); }}
+            className="w-full h-full cursor-crosshair touch-none absolute inset-0 z-10"
+          />
+          <canvas
+            ref={overlayCanvasRef}
+            className="w-full h-full pointer-events-none absolute inset-0 z-20"
           />
           <AnimatePresence>
             {isDrawing && (tool === 'pen' || tool === 'eraser') && (
